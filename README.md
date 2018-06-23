@@ -7,38 +7,7 @@
 
 
 ```python
-# Outlining
-
-# Pre-planning
-    # Need to get a bot Twitter account with its own unique API keys, separate from personal account
-
-# Your bot should scan your account every **five minutes** for mentions.
-# Your script should prevent abuse by analyzing **only** Twitter accounts that have not previously been analyzed.
-
-    # Create master function which uses time.sleep(300) to search for mentions.
-    # Use api.mentions_timeline() to capture mentions
-    # Have dedupe step for only new mentions
-    # Have dedupe step for only new users
-    # ID the user
-
-# Your bot should pull 500 most recent tweets to analyze for each incoming request.
-    
-    # Break down the incoming request to identify the requested user and requesting user.
-    # use api.user_timeline() to do sentiment analysis
-    # Plot using MatPlotLib
-    # Save to PNG file
-
-# Tweet
-    # Tweet the PNG file with a message
-    # Compose text with following guideline: 'Tweet Analysis: @analyzed_User (Thanks @requesting_user)'
-```
-
-
-```python
 from pprint import pprint
-
-# Dependencies
-
 import datetime
 import time
 import requests
@@ -48,14 +17,12 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 
-# Import tweepy
 import tweepy
 from twitter_config import (consumer_key,
                             consumer_secret,
                             access_token,
                             access_token_secret)
 
-# Import and Initialize Sentiment Analyzer
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 analyzer = SentimentIntensityAnalyzer()
 ```
@@ -70,34 +37,35 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
 
 ```python
-old_analyzed_users = []
-old_analyzed_tweet_urls = []
-old_analyzed_tweets = []
+old_requests = []
+old_urls = []
+old_tweets = set()
 
-# This function checks for duplicate tweets and analysis requests
-# It adds to lists of previously analyzed users (old_analyzed_users) and previously analyzed tweets (old_analyzed_tweets)
-# Its output is user_pairs, a list of dicts pairing Analysis Requested and User Requesting
+# check_mentions() checks for mentions, parses all users mentioned, figures out
+# if mentioned user has been analyzed before. If so, fires an apology response to avoid
+# duplication. If new request, outputs a list of new_requests to analyze.
 
 def check_mentions():
     
     #Locally generated mentions data to be passed onto other functions
-    global new_mentions
+    global new_requests
     
     #empty list for not-previously-analyzed mentions
-    new_mentions = []
+    new_requests = []
 
-    #mentions_timeline() only pulls last 20 mentions, can bump to 200, shouldn't be problematic on a 5 minute pull interval
+    # mentions_timeline() only pulls max 200 mentions, 
+    # shouldn't be problematic on a 5 minute pull interval
     mentions = api.mentions_timeline()
         
     for mention in mentions:
     
         # if tweet already analyzed, pass
-        if mention['id'] in old_analyzed_tweets:
+        if mention['id'] in old_tweets:
             pass
 
         else:
-            #add to old_analyzed_tweets to avoid subsequent duplication
-            old_analyzed_tweets.append(mention['id'])
+            # add to old_tweets to avoid subsequent duplication
+            old_tweets.add(mention['id'])
             
             #returns a list of all users mentioned in the tweet
             user_mentions = mention['entities']['user_mentions']
@@ -109,25 +77,29 @@ def check_mentions():
                     pass
                 
                 else:
-                    # If mentioned user has already analyzed, tweet the requesting user apologizing
-                    if user['screen_name'] in old_analyzed_users:
+                    # If mentioned user has already analyzed, 
+                    # tweet apology to requesting user
+                    if user['screen_name'] in old_requests:
 
                         dm_user = mention['user']['screen_name']
-                        old_analyzed_user = user['screen_name']
+                        old_user = user['screen_name']
                         
-                        # Check generate_tweets() for why this is commented. Logically works,
-                        # but this line runs faster than the Twitter API call completes and populates the 
-                        # old_analyzed_tweet_urls, so it breaks. Need to figure this out.
-                        #old_tweet_url = old_analyzed_tweet_urls[old_analyzed_users.index(old_analyzed_user)]
+                        # Check generate_tweets() for why this is commented. 
+                        # Basically breaks because it tries to index an empty list 
+                        # that logically should be populated but isn't because of delays
+                        # in either an API call response or generating graphical elements.
+                                                
+                        #old_url = old_urls[old_requests.index(old_analyzed_user)]
                         
-                        api.update_status(f'Sorry @{dm_user}, @{old_analyzed_user} has already been analyzed.') #You can see the tweet here: {old_tweet_url}')
+                        api.update_status(f'Sorry @{dm_user}, @{old_user} has already been analyzed.') 
+                        #You can see the tweet here: {old_url}')
                     
                     # If mentioned user is new, add to previously analyzed users
                     # Also add a dict requested analysis, requesting user, and status id of request
                     else:
-                        old_analyzed_users.append(user['screen_name'])
+                        old_requests.append(user['screen_name'])
                         #Used an insert() below instead of append() so oldest newly detected tweet goes first
-                        new_mentions.insert(0, {'Analysis requested': user['screen_name'],
+                        new_requests.insert(0, {'Analysis requested': user['screen_name'],
                                                   'User requesting': mention['user']['screen_name'],
                                                   'Request Status ID' : mention['id']
                                                  })
@@ -187,10 +159,14 @@ def generate_plot(target_user):
                              fontsize=15,
                              antialiased = True)
     
-    plot.set_title(f'''Sentiment Analysis of @{target_user}\n(Generated {date})''', fontsize=20)
+    plot.set_title(f'''Sentiment Analysis of @{target_user}\n(Generated {date})''', 
+                   fontsize=20)
     
-    plot.set_xlabel('Tweets Ago', fontsize=15)
-    plot.set_ylabel('Tweet Polarity', fontsize=15)
+    plot.set_xlabel('Tweets Ago', 
+                    fontsize=15)
+    
+    plot.set_ylabel('Tweet Polarity', 
+                    fontsize=15)
     
     plot.set_ylim([-1, 1])
     
@@ -209,14 +185,14 @@ def generate_plot(target_user):
 
 def generate_tweets():
 
-    for mention in new_mentions:
+    for request in new_requests:
     
-        requested_subject = mention['Analysis requested']
+        requested_subject = request['Analysis requested']
         
-        user_requesting = mention['User requesting']
+        user_requesting = request['User requesting']
         
 #        Tweepy has a field 'status id of tweet replying to' field, would like to figure this out to link to original tweet request
-        request_status_id = str(mention['Request Status ID'])
+        request_status_id = str(request['Request Status ID'])
         
         sentiment_analysis(requested_subject)
         
@@ -226,14 +202,14 @@ def generate_tweets():
         
         api.update_with_media('output.png', tweet_text, request_status_id)
         
-        # This code compiles tweet_urls, which plugs into the old_tweet_url check in check_mentions()
-        # Unfortunately, running into problems because the python loop happens MUCH faster than the API call response
-        # So even though logically the code should follow, because python doesn't wait for last_tweet to be populated
-        # before moving on, it breaks the code. Going to leave this for now until I figure out a proper way to hold back until response.
+        # This code compiles tweet_urls, which plugs into old_url check in check_mentions()
+        # Logically the code should work, but it already moves onto subsequent
+        # loops before the last old_urls.append() line runs.
+        # Maybe plot generation of the API call.
         
         last_tweet = api.user_timeline('@5000Awesomeo', count=1)
         last_tweet_url = last_tweet[0]['entities']['media'][0]['display_url']
-        old_analyzed_tweet_urls.append('https://' + last_tweet_url)
+        old_urls.append('https://' + last_tweet_url)
         
 ```
 
@@ -246,7 +222,7 @@ generate_plot('BarackObama')
 ```
 
 
-![png](output_8_0.png)
+![png](output_7_0.png)
 
 
 
@@ -256,31 +232,31 @@ generate_tweets()
 ```
 
 
-![png](output_9_0.png)
+![png](output_8_0.png)
 
 
 
-![png](output_9_1.png)
+![png](output_8_1.png)
 
 
 
-![png](output_9_2.png)
+![png](output_8_2.png)
 
 
 
-![png](output_9_3.png)
+![png](output_8_3.png)
 
 
 
-![png](output_9_4.png)
+![png](output_8_4.png)
 
 
 
-![png](output_9_5.png)
+![png](output_8_5.png)
 
 
 
-![png](output_9_6.png)
+![png](output_8_6.png)
 
 
 
