@@ -71,6 +71,7 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
 ```python
 old_analyzed_users = []
+old_analyzed_tweet_urls = []
 old_analyzed_tweets = []
 
 # This function checks for duplicate tweets and analysis requests
@@ -82,8 +83,10 @@ def check_mentions():
     #Locally generated mentions data to be passed onto other functions
     global new_mentions
     
+    #empty list for not-previously-analyzed mentions
     new_mentions = []
 
+    #mentions_timeline() only pulls last 20 mentions, can bump to 200, shouldn't be problematic on a 5 minute pull interval
     mentions = api.mentions_timeline()
         
     for mention in mentions:
@@ -106,9 +109,19 @@ def check_mentions():
                     pass
                 
                 else:
-                    # If mentioned user has already analyzed, pass
+                    # If mentioned user has already analyzed, tweet the requesting user apologizing
                     if user['screen_name'] in old_analyzed_users:
-                        pass
+
+                        dm_user = mention['user']['screen_name']
+                        old_analyzed_user = user['screen_name']
+                        
+                        # Check generate_tweets() for why this is commented. Logically works,
+                        # but this line runs faster than the Twitter API call completes and populates the 
+                        # old_analyzed_tweet_urls, so it breaks. Need to figure this out.
+                        #old_tweet_url = old_analyzed_tweet_urls[old_analyzed_users.index(old_analyzed_user)]
+                        
+                        api.update_status(f'Sorry @{dm_user}, @{old_analyzed_user} has already been analyzed.') #You can see the tweet here: {old_tweet_url}')
+                    
                     # If mentioned user is new, add to previously analyzed users
                     # Also add a dict requested analysis, requesting user, and status id of request
                     else:
@@ -212,6 +225,16 @@ def generate_tweets():
         tweet_text = f'''Sentiment analysis of @{requested_subject}'s previous 500 tweet (requested by @{user_requesting})'''
         
         api.update_with_media('output.png', tweet_text, request_status_id)
+        
+        # This code compiles tweet_urls, which plugs into the old_tweet_url check in check_mentions()
+        # Unfortunately, running into problems because the python loop happens MUCH faster than the API call response
+        # So even though logically the code should follow, because python doesn't wait for last_tweet to be populated
+        # before moving on, it breaks the code. Going to leave this for now until I figure out a proper way to hold back until response.
+        
+        last_tweet = api.user_timeline('@5000Awesomeo', count=1)
+        last_tweet_url = last_tweet[0]['entities']['media'][0]['display_url']
+        old_analyzed_tweet_urls.append('https://' + last_tweet_url)
+        
 ```
 
 
