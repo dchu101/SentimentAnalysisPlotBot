@@ -222,7 +222,7 @@ generate_plot('BarackObama')
 ```
 
 
-![png](output_7_0.png)
+![png](output_8_0.png)
 
 
 
@@ -232,31 +232,31 @@ generate_tweets()
 ```
 
 
-![png](output_8_0.png)
+![png](output_9_0.png)
 
 
 
-![png](output_8_1.png)
+![png](output_9_1.png)
 
 
 
-![png](output_8_2.png)
+![png](output_9_2.png)
 
 
 
-![png](output_8_3.png)
+![png](output_9_3.png)
 
 
 
-![png](output_8_4.png)
+![png](output_9_4.png)
 
 
 
-![png](output_8_5.png)
+![png](output_9_5.png)
 
 
 
-![png](output_8_6.png)
+![png](output_9_6.png)
 
 
 
